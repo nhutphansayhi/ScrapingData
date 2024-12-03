@@ -1,14 +1,13 @@
-import threading, time
+import time
 
-class reqthread(threading.Thread):
-    def run(self):
-        for i in range(0, 10):
-            time.sleep(1)
-            print('.')
+from rich.progress import Progress
 
-try:
-    thread = reqthread()
-    thread.start()
-    thread.join()
-except (KeyboardInterrupt, SystemExit):
-    print('\n! Received keyboard interrupt, quitting threads.\n')
+with Progress() as progress:
+
+    task1 = progress.add_task("[red]Loading...", total=1000)
+
+    while not progress.finished:
+        progress.update(task1, advance=15)
+        time.sleep(0.02)
+    
+    print("may gay!")

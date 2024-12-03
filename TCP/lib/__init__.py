@@ -1,3 +1,3 @@
 from lib.log import *
 
-LOG = init_logger()
+LOG, CONSOLE = init_logger()

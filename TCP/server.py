@@ -35,7 +35,7 @@ def main():
     except KeyboardInterrupt:
         LOG.info("Server stopped.")
     except Exception as e:
-        LOG.error("Error:", e)
+        LOG.error(f"Error: {e}")
     finally:
         SERVER.close()
 

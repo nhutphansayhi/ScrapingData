@@ -11,5 +11,5 @@ def handshake(c):
     # Tạo khóa AES và mã hóa bằng khóa công khai RSA của server
     AES_KEY = get_random_bytes(16)
     encrypted_aes_key = cipher_rsa.encrypt(AES_KEY)
-    c.send(encrypted_aes_key)
+    c.sendall(encrypted_aes_key)
     return AES_KEY

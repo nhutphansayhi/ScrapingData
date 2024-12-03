@@ -11,6 +11,8 @@ import lib
 from lib.lib import *
 from lib.log import *
 import globals
+from client_lib.util import *
+import json
 
 LOG = lib.LOG
     
@@ -19,25 +21,21 @@ def main():
     PORT = globals.SERVER_PORT
     
     c = socket(AF_INET, SOCK_STREAM)
-    try:
-        c.connect((HOST, PORT))
-        AES_KEY = handshake(c)
-        
-        encrypted_files = c.recv(1024)
-        print(encrypted_files)
-        # files = decrypt_packet(encrypted_files, AES_KEY)
-        LOG.info("Files in server directory:")
-        # LOG.info(files.decode())
+    c.connect((HOST, PORT))
+    AES_KEY = handshake(c)
+    
+    client_ip, client_port = c.getsockname()
+    files_list = getFileList(c, client_ip, client_port, AES_KEY)
+    
+    files_list = json.loads(files_list['data'].decode('utf-8'))
 
-        try:
-            x = input("Enter file name to download: ")
-        except KeyboardInterrupt:
-            LOG.info("Client stopped.")
-        finally:
-            c.close()
-    except ConnectionRefusedError:
-        LOG.error("Can not connect to server.")
-        c.close()        
+    msg_files_list = "[magenta]Files in server database:[/magenta]\n" + "\n".join([f"[green]{f['name']}[/green] - {f['size'] // (1024**2) } MB" for f in files_list])
+    LOG.info(msg_files_list, extra={"markup": True})
+
+    handle_process(c, client_ip, client_port, AES_KEY)
+    
+    
+    c.close()        
 
 if __name__ == "__main__":
     main()

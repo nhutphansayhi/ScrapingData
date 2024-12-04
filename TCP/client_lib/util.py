@@ -49,7 +49,7 @@ def download_chunk(file_name, offset, length, chunk_index):
         while True:
             data = client.recv(1024+30)
             if not data:
-                raise Exception('There is an error when downloading file')
+                raise Exception('There is an error when downloading file') #TODO: Handle this exception
             data = decrypt_packet(data, dc_aes_key)
             f.write(data)
             client.sendall(encrypt_packet(create_packet("", client_ip, client_port, 'A', client), dc_aes_key))

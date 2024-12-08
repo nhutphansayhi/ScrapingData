@@ -15,9 +15,12 @@ import sys
 import time
 import json
 from client_lib.connection import *
-
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 directory = ''
 CHUNK_NUMBER = globals.CHUNK_NUMBER
+
+
+        
 
 def merge_file(file_name):
     file_path = os.path.join("download", file_name)
@@ -28,7 +31,7 @@ def merge_file(file_name):
                 f.write(chunk_f.read())
             os.remove(chunk_path)
 
-def download_chunk(file_name, offset, length, chunk_index):
+def download_chunk(file_name, offset, length, chunk_index, progress, task_id):
     LOG = lib.LOG
     client = socket(AF_INET, SOCK_STREAM)
     client.connect((globals.SERVER_HOST, globals.SERVER_PORT))
@@ -40,40 +43,53 @@ def download_chunk(file_name, offset, length, chunk_index):
         'length': length,
         'chunk_index': chunk_index
     }
-    client.sendall(encrypt_packet(create_packet(json.dumps(payload), client_ip, client_port, 'D', client), dc_aes_key))
+
+    client.settimeout(5)
+    client.sendall(create_packet(json.dumps(payload), client_ip, client_port, 'D', client, dc_aes_key))
     download_path = os.path.join("download", file_name + f".part{chunk_index}")
     # try:
     with open(download_path, 'wb') as f:
-    
-        client.settimeout(5)
+        chunk_downloaded = 0
         while True:
-            data = client.recv(1024+30)
-            if not data:
-                raise Exception('There is an error when downloading file')
+            header = client.recv(15+16)
+            header = decrypt_packet(header, dc_aes_key)
+            protocol_name, sender_ip, sender_port, type_request, payload_length = GEYS_header_parse(header)
+            data = client.recv(payload_length)
             data = decrypt_packet(data, dc_aes_key)
+            if(data == b'EOF'):
+                # LOG.info(f"{data}")
+                break
+            chunk_downloaded = len(data)
+            
             f.write(data)
-            client.sendall(encrypt_packet(create_packet("", client_ip, client_port, 'A', client), dc_aes_key))
-        return 1
+            # LOG.info(chunk_downloaded)
+            client.sendall(create_packet("ACK", client_ip, client_port, 'A', client, dc_aes_key))
+            
+            progress.update(task_id, advance=chunk_downloaded)
+    disconnect(client, client_ip, client_port, dc_aes_key)
+    return 1
     # except Exception as e:
     #     LOG.error(f"Error: {e}")
     #     return -1
 
-def download_file(c, client_ip, client_port, file_name, aes_key):
+def download_file(connection, client_ip, client_port, file_name, aes_key):
     LOG = lib.LOG
-    # print('send ', create_packet(file_name, 'D', c))
+    # print('send ', create_packet(file_name, 'D', connection))
     payload = {
         'file_name': file_name,
         'chunk_number': CHUNK_NUMBER
     }
     # time.sleep(3)
-    c.sendall(encrypt_packet(create_packet(json.dumps(payload), client_ip, client_port, 'E',  c), aes_key))
-    # c.send(create_packet(file_name, 'D', c))
+    connection.settimeout(5)
+    connection.sendall(create_packet(json.dumps(payload), client_ip, client_port, 'E',  connection, aes_key))
+    # LOG.info("lll")
+    # connection.send(create_packet(file_name, 'D', connection))
     try:
-        data = c.recv(1024)
-        if not data:
-            raise Exception('No data')
+        data = connection.recv(16+15)
         data = decrypt_packet(data, aes_key)
-        protocol_name, sender_ip, sender_port, type_request, payload_length, payload = GEYS_parse(data)
+        protocol_name, sender_ip, sender_port, type_request, payload_length = GEYS_header_parse(data)
+        payload = connection.recv(payload_length) 
+        payload = decrypt_packet(payload, aes_key)
         payload = json.loads(payload.decode())
         response = payload['response']
         if response == 'N':
@@ -84,16 +100,27 @@ def download_file(c, client_ip, client_port, file_name, aes_key):
         LOG.info(f"[cyan]Downloading file: [green]{file_name}[/] - {file_size // (2**20)} MB[/cyan]", extra={"markup": True})   
         # LOG.info(f"     File size: {file_size}")
         chunk_size = (file_size + CHUNK_NUMBER - 1) // CHUNK_NUMBER
-        for i in range(CHUNK_NUMBER):
-            offset = chunk_size * i
-            length = min(chunk_size, file_size - offset)
-            thr = Thread(target=download_chunk, args=(file_name, offset, length, i+1))
-            thr.start()
-            threads.append(thr)
+        progress = Progress(
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             
-        for thr in threads:
-            thr.join()
-        merge_file(file_name)
+            TimeRemainingColumn(),
+        )
+        with progress:
+            tasks_id = []
+            for i in range(CHUNK_NUMBER):
+                offset = chunk_size * i
+                length = min(chunk_size, file_size - offset)
+                task_id = progress.add_task(f"Part {i+1}", total=length)
+                tasks_id.append(task_id)
+                thr = Thread(target=download_chunk, args=(file_name, offset, length, i+1, progress, task_id))
+                thr.start()
+                threads.append(thr)
+            
+            for thr in threads:
+                thr.join()
+            merge_file(file_name)
         return 1
         
         # CHUNK_NUMBER = globals.CHUNK_NUMBER
@@ -122,45 +149,59 @@ def msg_found_file(files_list):
 
 def getFirstChecking(file_path):
     files_list = []
+    line = 0
     with open(file_path, 'r') as f:
         files = f.readlines()
         for file in files:
+            line += 1
             file = file.strip()
             files_list.append(file)
-    return files_list
+    return files_list, line
 
-def handle_process(c, client_ip, client_port, aes_key):
+def detect_file_change(file_path, current_line, sha256):
+    files_list = []
+    new_sha256 = calculate_hash_sha256(file_path)
+    if new_sha256 != sha256:
+        new_files_list, new_current_line = getFirstChecking(file_path)
+        files_list = new_files_list[current_line:]
+        current_line = new_current_line
+    return files_list, current_line, new_sha256
+
+def handle_process(connection, client_ip, client_port, aes_key):
     LOG = lib.LOG
     CONSOLE = lib.CONSOLE
     # try:
     # while True:
     files_list = []
+    current_line = 0
+    sha256 = -1
     with CONSOLE.status("[cyan]First checking your input.txt...") as status:
         spinner = Spinner("circle")
         file_path = os.path.join(directory, 'input.txt')
         # print(file_path)
         sha256 = calculate_hash_sha256(file_path)
-        if sha256['code'] == -1:
-            with open(file_path, 'w') as f:
-                pass
-        sha256 = calculate_hash_sha256(file_path)
-        files_list = getFirstChecking(file_path)
+        files_list, current_line = getFirstChecking(file_path)
         time.sleep(2)
 
     LOG.info(msg_found_file(files_list), extra={"markup": True})
-
+    # disconnect(connection, client_ip, client_port, aes_key)
     while True:
-        if len(files_list) != 0:
+        if len(files_list):
+            LOG.info("[cyan]Found changes in your input.txt:[/]", extra={"markup": True})
+            for file in files_list:
+                LOG.info(f"  [green]{file}[/]", extra={"markup": True})
             LOG.info("[cyan]Starting download files...[/]", extra={"markup": True})
-        for i in range(len(files_list)):
-            file_name = files_list[i] 
-            response = download_file(c, client_ip, client_port, file_name, aes_key)
-            if response == 1:
-                LOG.info(f"[green]Downloaded file {file_name} successfully[/]", extra={"markup": True})
-            break
-        break
+            for i in range(len(files_list)):
+                file_name = files_list[i]
+                response = download_file(connection, client_ip, client_port, file_name, aes_key)
+                if response == 1:
+                    LOG.info(f"[green]Downloaded file {file_name} successfully[/]", extra={"markup": True})
+        else:
+            LOG.info("[cyan]No file found in your input.txt. Waiting for changes...[/]", extra={"markup": True})
         time.sleep(5)
-            
+        files_list, current_line, sha256 = detect_file_change(file_path, current_line, sha256) 
+    
+    # disconnect(connection, client_ip, client_port, aes_key)
     
         # with CONSOLE.status("[cyan]Scanning changes in your input.txt...") as status:
         #     spinner = Spinner("circle")  # Chọn loại spinner, có thể là "circle", "dots", "star", ...
@@ -173,23 +214,27 @@ def handle_process(c, client_ip, client_port, aes_key):
     # except Exception as e:
     #     LOG.error(f"Error: {e}")
         
-def getFileList(c, client_ip, client_port, AES_KEY):
-    # print('send ', create_packet("", 'F', c))
-    c.sendall(encrypt_packet(create_packet("", client_ip, client_port, 'F', c), AES_KEY))
-    # c.send(create_packet("", 'F', c))
-    data = c.recv(1024)
-    if not data:
+def getFileList(connection, client_ip, client_port, AES_KEY):
+    # print('send ', create_packet("", 'F', connection))
+    connection.settimeout(5)
+    try:
+        connection.sendall(create_packet("", client_ip, client_port, 'F', connection, AES_KEY))
+        # connection.send(create_packet("", 'F', connection))
+        header = connection.recv(16+15)
+        header = decrypt_packet(header, AES_KEY)
+        protocol_name, sender_ip, sender_port, type_request, content_length = GEYS_header_parse(header)
+        data = connection.recv(content_length)
+        data = decrypt_packet(data, AES_KEY)
+    except connection.timeout:
         return -1
-    data = decrypt_packet(data, AES_KEY)
-    protocol_name, sender_ip, sender_port, type_request, content_length, payload = GEYS_parse(data)
-    # print(protocol_name, sender_ip, sender_port, type_request, content_length, chunk_number, file_name)
+        # print(protocol_name, sender_ip, sender_port, type_request, content_length, data)
     return {
         'protocol_name': protocol_name,
         'sender_ip': sender_ip,
         'sender_port': sender_port,
         'type_request': type_request,
         'content_length': content_length,
-        'data': data[15: 15+content_length]
+        'data': data
     }
     
     

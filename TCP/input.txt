@@ -1,2 +1,3 @@
 5MB.zip
 10MB.zip
+image.jpg

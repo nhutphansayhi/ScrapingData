@@ -17,7 +17,7 @@ def accept_incoming_connections(SERVER, addresses, PUBLIC_KEY, PRIVATE_KEY):
             AES_KEY = handshake(client, PUBLIC_KEY, PRIVATE_KEY)
             LOG.info("%s:%s handshaked." % client_address)
             addresses[client] = client_address
-            Thread(target=handle_client, args=(client, client_address, AES_KEY)).start()
+            Thread(target=handle_client, args=(client, client_address, SERVER, AES_KEY)).start()
         except Exception as e:
             print("Error: ", e)
             
@@ -31,3 +31,4 @@ def handshake(client, public_key, private_key):
     aes_key = cipher_rsa.decrypt(encrypted_aes_key)
     # print("AES key received and decrypted from port ", client.getpeername()[1])
     return aes_key
+

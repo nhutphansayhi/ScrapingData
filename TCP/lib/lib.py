@@ -25,35 +25,20 @@ def fill_zero(data, n):
     return data
 
 
-def create_packet(data, ip, port, type, c):
+def create_packet(data, ip, port, type, connection, AES_KEY):
     
     # print(ip, port)
     protocol_name = b'GEYS'  # Định dạng protocol name (4 byte)
     sender_ip = fill_zero(ip_to_bytes(ip), 4)  # Địa chỉ IP (4 byte)
     sender_port = long_to_bytes(port, 2)  # Port (2 byte)
     type_request = type.encode('utf-8')[:1]  # Loại request (1 byte)
-    content_length = long_to_bytes(len(data), 4)  # Độ dài nội dung (4 byte)
     content = data if isinstance(data, bytes) == True else data.encode('utf-8')  # Nội dung (n bytes)
-    
-    
+    encrypted_content = encrypt_packet(content, AES_KEY)
+    content_length = long_to_bytes(len(encrypted_content), 4)  # Độ dài nội dung (4 byte)
+    encrypted_header = encrypt_packet(protocol_name + sender_ip + sender_port + type_request + content_length, AES_KEY)
+   
     # Tạo gói tin
-    packet = protocol_name + sender_ip + sender_port + type_request + content_length + content
-    # print(f"Packet before: {packet}")
-    # key = get_random_bytes(16)
-    # packet = encrypt_packet(packet, key)
-    # print(f"Packet: {packet}")
-    # packet = decrypt_packet(packet, key)
-    # print(f"Packet after: {packet}")
-    # _protocol_name = packet[:4].decode('utf-8')  # 4 byte đầu
-    # _sender_ip = bytes_to_long(packet[4:8])  # 4 byte tiếp theo
-    # _sender_port = int.from_bytes(packet[8:10], byteorder='big')  # 2 byte tiếp theo
-    # _type_request = packet[10:11].decode('utf-8')  # 1 byte tiếp theo
-    # _content_length = int.from_bytes(packet[11:15], byteorder='big')  # 4 byte tiếp theo
-    # print(f"Protocol Name: {_protocol_name}")
-    # print(f"Sender IP: {_sender_ip}")
-    # print(f"Sender Port: {_sender_port}")
-    # print(f"Type Request: {_type_request}")
-    # print(f"Content Length: {_content_length}")
+    packet = encrypted_header + encrypted_content
     return packet
 
 def calculate_hash_sha256(file_path):

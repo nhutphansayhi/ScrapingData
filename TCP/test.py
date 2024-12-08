@@ -1,43 +1,53 @@
-from rich.progress import Progress, BarColumn, TextColumn, SpinnerColumn
-from threading import Thread
-from rich.console import Console
+import threading
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
 import time
 
-console = Console()
+# Giả lập hàm tải chunk
+def download_chunk(file_name, offset, length, thread_id, progress, task_id):
+    chunk_downloaded = 0
+    while chunk_downloaded < length:
+        time.sleep(0.1)  # Giả lập tải dữ liệu
+        chunk_size = min(1024, length - chunk_downloaded)  # Tải 1024 byte mỗi lần
+        chunk_downloaded += chunk_size
+        progress.update(task_id, advance=chunk_size)
 
-def task(progress, task_id, duration):
-    """Hàm giả lập một công việc."""
-    for i in range(100):
-        time.sleep(duration / 100)  # Mô phỏng thời gian xử lý
-        progress.update(task_id, advance=1)
-
+# Main function
 def main():
-    # Tạo Progress để quản lý và hiển thị tiến trình
-    with Progress(console=console) as progress:
-        # Tạo danh sách các task
-        tasks = [
-            {"desc": "Task 1", "duration": 5},
-            {"desc": "Task 2", "duration": 7},
-            {"desc": "Task 3", "duration": 4},
-            {"desc": "Task 4", "duration": 6},
-        ]
-
-        # Tạo các task trong Progress
-        task_ids = [
-            progress.add_task(task["desc"], total=100) for task in tasks
-        ]
-
-        # Tạo và khởi động các thread
-        threads = [
-            Thread(target=task, args=(progress, task_ids[i], tasks[i]["duration"]))
-            for i in range(len(tasks))
-        ]
-        for t in threads:
-            t.start()
-
+    CHUNK_NUMBER = 4
+    file_size = 100000  # Giả lập tệp có kích thước 100,000 byte
+    file_name = "example_file"
+    
+    chunk_size = (file_size + CHUNK_NUMBER - 1) // CHUNK_NUMBER
+    threads = []
+    
+    # Khởi tạo thanh tiến trình
+    progress = Progress(
+        TextColumn("[bold blue]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeRemainingColumn(),
+    )
+    
+    with progress:
+        # Tạo task cho từng luồng
+        task_ids = []
+        for i in range(CHUNK_NUMBER):
+            offset = chunk_size * i
+            length = min(chunk_size, file_size - offset)
+            task_id = progress.add_task(f"Chunk {i+1}", total=length)
+            task_ids.append(task_id)
+            
+            # Tạo thread
+            thr = threading.Thread(
+                target=download_chunk,
+                args=(file_name, offset, length, i+1, progress, task_id)
+            )
+            thr.start()
+            threads.append(thr)
+        
         # Đợi tất cả các thread hoàn thành
-        for t in threads:
-            t.join()
+        for thr in threads:
+            thr.join()
 
 if __name__ == "__main__":
     main()

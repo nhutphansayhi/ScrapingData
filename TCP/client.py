@@ -20,22 +20,22 @@ def main():
     HOST = globals.SERVER_HOST
     PORT = globals.SERVER_PORT
     
-    c = socket(AF_INET, SOCK_STREAM)
-    c.connect((HOST, PORT))
-    AES_KEY = handshake(c)
+    connection = socket(AF_INET, SOCK_STREAM)
+    connection.connect((HOST, PORT))
+    AES_KEY = handshake(connection)
     
-    client_ip, client_port = c.getsockname()
-    files_list = getFileList(c, client_ip, client_port, AES_KEY)
+    client_ip, client_port = connection.getsockname()
+    files_list = getFileList(connection, client_ip, client_port, AES_KEY)
     
-    files_list = json.loads(files_list['data'].decode('utf-8'))
+    files_list = json.loads(files_list['data'].decode())
 
     msg_files_list = "[magenta]Files in server database:[/magenta]\n" + "\n".join([f"[green]{f['name']}[/green] - {f['size'] // (1024**2) } MB" for f in files_list])
     LOG.info(msg_files_list, extra={"markup": True})
 
-    handle_process(c, client_ip, client_port, AES_KEY)
+    handle_process(connection, client_ip, client_port, AES_KEY)
     
     
-    c.close()        
+    connection.close()        
 
 if __name__ == "__main__":
     main()

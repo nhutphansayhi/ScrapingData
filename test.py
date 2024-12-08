@@ -1,13 +1,14 @@
-import time
+from Crypto.Random import get_random_bytes
+from threading import Thread
 
-from rich.progress import Progress
+input = b'hello'
 
-with Progress() as progress:
+aes_key = get_random_bytes(16)
 
-    task1 = progress.add_task("[red]Loading...", total=1000)
-
-    while not progress.finished:
-        progress.update(task1, advance=15)
-        time.sleep(0.02)
-    
-    print("may gay!")
+def encrypt_packet(packet, key):
+    if isinstance(packet, str):
+        packet = packet.encode()
+    cipher_aes = AES.new(key, AES.MODE_EAX)
+    nonce = cipher_aes.nonce
+    ciphertext, tag = cipher_aes.encrypt_and_digest(packet)
+    return nonce + ciphertext

@@ -264,10 +264,11 @@ class ParallelArxivScraper:
         logger.info(f"  - {output_csv_details}")
     
     def scrape_papers_batch(self, paper_ids: List[str], batch_size: int = 50, 
-                           update_interval: int = 100):
+                           update_interval: int = 50, on_checkpoint=None):
         """
         Scrape papers theo batch
-        Tu dong update metrics moi update_interval papers
+        Tu dong update metrics moi update_interval papers (default: 50)
+        Gọi callback on_checkpoint mỗi khi đến checkpoint
         """
         self.start_time = time.time()
         total = len(paper_ids)
@@ -293,7 +294,16 @@ class ParallelArxivScraper:
             
             # Cap nhat metrics moi update_interval papers
             if current_total % update_interval == 0 or current_total == total:
-                logger.info(f"Cap nhat metrics: da xu ly {current_total}/{total} papers")
+                logger.info(f"\n{'='*70}")
+                logger.info(f"💾 CHECKPOINT at paper {current_total}/{total}")
+                logger.info(f"{'='*70}")
                 self.save_metrics()
+                
+                # Gọi callback nếu có (để main.py lưu thêm CSV của nó)
+                if on_checkpoint:
+                    on_checkpoint(current_total, total)
+                
+                logger.info(f"✅ All statistics files updated successfully!")
+                logger.info(f"{'='*70}\n")
         
         return {'successful': successful, 'failed': failed, 'total': total}

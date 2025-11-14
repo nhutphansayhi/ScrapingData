@@ -362,25 +362,63 @@ class ArxivScraperPipeline:
             logger.info(f"First paper: {paper_ids[0]}")
             logger.info(f"Last paper: {paper_ids[-1]}")
         
-        for i, arxiv_id in enumerate(paper_ids, 1):
-            logger.info(f"\n[{i}/{len(paper_ids)}] Processing {arxiv_id}")
+        # Nếu dùng parallel scraper, dùng batch processing với checkpoint
+        if self.use_parallel and hasattr(self.arxiv_scraper, 'scrape_papers_batch'):
+            logger.info("\n🚀 Using PARALLEL batch processing with checkpoints every 50 papers")
             
-            try:
-                self.scrape_single_paper(arxiv_id)
-            except Exception as e:
-                logger.error(f"Unexpected error processing {arxiv_id}: {e}")
-                self.stats['failed_papers'] += 1
-            
-            # Print progress và save stats mỗi 10 papers
-            if i % 10 == 0:
+            # Định nghĩa callback cho checkpoint
+            def checkpoint_callback(current, total):
+                """Callback được gọi mỗi 50 papers - Cập nhật paper_details từ folders"""
+                logger.info("📊 Collecting paper details from folders...")
+                self.collect_paper_details_from_folders()
                 self.print_progress()
-                # Save intermediate stats để không mất dữ liệu nếu crash
-                self.save_stats(intermediate=True)
-            
-            # Save stats mỗi 50 papers (full save)
-            if i % 50 == 0:
-                logger.info(f"💾 Checkpoint: Saving full statistics at paper {i}/{len(paper_ids)}")
                 self.save_stats(intermediate=False)
+                self.save_paper_details_csv()
+            
+            # Chạy batch với checkpoint mỗi 50 papers
+            result = self.arxiv_scraper.scrape_papers_batch(
+                paper_ids, 
+                batch_size=6,  # Process 6 papers per batch (same as MAX_WORKERS)
+                update_interval=50,  # Checkpoint mỗi 50 papers
+                on_checkpoint=checkpoint_callback
+            )
+            
+            self.stats['successful_papers'] += result['successful']
+            self.stats['failed_papers'] += result['failed']
+            
+            # Cập nhật paper_details cuối cùng
+            logger.info("\n📊 Final collection of paper details...")
+            self.collect_paper_details_from_folders()
+            
+        else:
+            # Fallback: sequential processing với checkpoint thủ công
+            logger.info("\n⚙️  Using SEQUENTIAL processing with manual checkpoints")
+            for i, arxiv_id in enumerate(paper_ids, 1):
+                logger.info(f"\n[{i}/{len(paper_ids)}] Processing {arxiv_id}")
+                
+                try:
+                    self.scrape_single_paper(arxiv_id)
+                except Exception as e:
+                    logger.error(f"Unexpected error processing {arxiv_id}: {e}")
+                    self.stats['failed_papers'] += 1
+                
+                # Print progress và save stats mỗi 50 papers
+                if i % 50 == 0:
+                    self.print_progress()
+                    logger.info(f"\n{'='*70}")
+                    logger.info(f"💾 CHECKPOINT at paper {i}/{len(paper_ids)}")
+                    logger.info(f"{'='*70}")
+                    # Save full stats với CSV updates
+                    self.save_stats(intermediate=False)
+                    self.save_paper_details_csv()
+                    logger.info(f"✅ All statistics files updated successfully!")
+                    logger.info(f"{'='*70}\n")
+                
+                # Quick save mỗi 10 papers (chỉ JSON, không CSV để tăng tốc)
+                elif i % 10 == 0:
+                    self.print_progress()
+                    # Save intermediate stats để không mất dữ liệu nếu crash
+                    self.save_stats(intermediate=True)
         
         self.cleanup_all_temp_files()
         
@@ -393,11 +431,25 @@ class ArxivScraperPipeline:
         self.save_stats()
     
     def print_progress(self):
-        logger.info("\n" + "="*60)
-        logger.info("PROGRESS UPDATE")
-        logger.info(f"Successful: {self.stats['successful_papers']}")
-        logger.info(f"Failed: {self.stats['failed_papers']}")
-        logger.info(f"Success rate: {self.stats['successful_papers']/max(1, self.stats['successful_papers']+self.stats['failed_papers'])*100:.1f}%")
+        logger.info("\n" + "="*70)
+        logger.info("📊 PROGRESS UPDATE")
+        logger.info("="*70)
+        total_processed = self.stats['successful_papers'] + self.stats['failed_papers']
+        logger.info(f"Papers processed: {total_processed}")
+        logger.info(f"  ✅ Successful: {self.stats['successful_papers']}")
+        logger.info(f"  ❌ Failed: {self.stats['failed_papers']}")
+        logger.info(f"  📈 Success rate: {self.stats['successful_papers']/max(1, total_processed)*100:.1f}%")
+        
+        # Memory info
+        if self.stats['ram_samples']:
+            current_ram = self.process.memory_info().rss / (1024 * 1024)
+            logger.info(f"  💾 RAM: {current_ram:.1f} MB (max: {self.stats['max_ram_mb']:.1f} MB)")
+        
+        # Disk info
+        current_disk = get_directory_size(self.output_dir) / (1024 * 1024)
+        logger.info(f"  💿 Disk: {current_disk:.1f} MB")
+        
+        logger.info("="*70)
         logger.info("="*60 + "\n")
     
     def cleanup_all_temp_files(self):
@@ -590,6 +642,92 @@ class ArxivScraperPipeline:
         
         logger.info(f"CSV statistics saved to: {csv_file}")
     
+    def collect_paper_details_from_folders(self):
+        """Scan tất cả paper folders và build paper_details list"""
+        import psutil
+        
+        # Clear existing list
+        self.paper_details = []
+        
+        # Get all paper folders
+        if not os.path.exists(self.output_dir):
+            return
+        
+        folders = sorted([d for d in os.listdir(self.output_dir) 
+                         if os.path.isdir(os.path.join(self.output_dir, d)) and '-' in d])
+        
+        current_disk = get_directory_size(self.output_dir) / (1024 * 1024)
+        current_ram = self.process.memory_info().rss / (1024 * 1024)
+        avg_ram = sum(self.stats['ram_samples']) / len(self.stats['ram_samples']) if self.stats['ram_samples'] else current_ram
+        
+        for paper_id_num, folder in enumerate(folders, 1):
+            paper_dir = os.path.join(self.output_dir, folder)
+            arxiv_id = folder.replace('-', '.')
+            
+            # Load metadata
+            metadata_path = os.path.join(paper_dir, "metadata.json")
+            title = 'N/A'
+            authors = []
+            
+            if os.path.exists(metadata_path):
+                try:
+                    with open(metadata_path, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                        title = metadata.get('title', 'N/A')
+                        authors = metadata.get('authors', [])
+                except:
+                    pass
+            
+            # Calculate sizes
+            size_before = 0
+            size_after = 0
+            tex_path = os.path.join(paper_dir, "tex")
+            if os.path.exists(tex_path):
+                size_after = get_directory_size(tex_path)
+                # Estimate size before (assume ~12MB per version)
+                versions = len([d for d in os.listdir(tex_path) 
+                              if os.path.isdir(os.path.join(tex_path, d))])
+                size_before = size_after + (12 * 1024 * 1024 * max(versions, 1))
+            
+            # Count references
+            num_refs = 0
+            ref_path = os.path.join(paper_dir, "references.json")
+            if os.path.exists(ref_path):
+                try:
+                    with open(ref_path, 'r', encoding='utf-8') as f:
+                        refs = json.load(f)
+                        if isinstance(refs, list):
+                            num_refs = len(refs)
+                except:
+                    pass
+            
+            # Get processed time (from metadata file mtime)
+            processed_at = 'N/A'
+            if os.path.exists(metadata_path):
+                processed_at = time.strftime('%Y-%m-%d %H:%M:%S', 
+                                            time.localtime(os.path.getmtime(metadata_path)))
+            
+            # Add to list
+            paper_detail = {
+                'paper_id': paper_id_num,
+                'arxiv_id': arxiv_id,
+                'title': title[:100],  # Limit title length
+                'authors': ', '.join(authors[:3]) if authors else 'N/A',  # Max 3 authors
+                'runtime_s': 0.0,  # Not tracked in parallel mode
+                'size_before': size_before,
+                'size_after': size_after,
+                'size_before_figures': size_before,
+                'size_after_figures': size_after,
+                'num_refs': num_refs,
+                'current_output_size': int(current_disk * 1024 * 1024),
+                'max_rss': round(self.stats['max_ram_mb'], 2),
+                'avg_rss': round(avg_ram, 2),
+                'processed_at': processed_at
+            }
+            self.paper_details.append(paper_detail)
+        
+        logger.info(f"✅ Collected {len(self.paper_details)} paper details from folders")
+    
     def save_paper_details_csv(self):
         """Save detailed per-paper statistics to CSV"""
         csv_file = os.path.join(self.output_dir, "paper_details.csv")
@@ -607,7 +745,7 @@ class ArxivScraperPipeline:
             writer.writeheader()
             writer.writerows(self.paper_details)
         
-        logger.info(f"Paper details CSV saved to: {csv_file} ({len(self.paper_details)} papers)")
+        logger.info(f"✅ Paper details CSV updated: {csv_file} ({len(self.paper_details)} papers)")
 
 
 def main():

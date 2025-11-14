@@ -17,16 +17,16 @@ logger = logging.getLogger(__name__)
 
 class ParallelArxivScraper:
     """
-    Scraper chạy song song để tăng tốc
-    Dùng 6 workers (vẫn tuân thủ rate limit)
-    Tự động update metrics mỗi 100 papers
+    Scraper chay song song de tang toc
+    Dung 6 workers (van tuan thu rate limit)
+    Tu dong update metrics moi 100 papers
     """
     
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
         self.lock = threading.Lock()
         self.start_time = None
-        self.paper_times = []  # lưu thời gian mỗi paper
+        self.paper_times = []  # luu thoi gian moi paper
     
     def scrape_single_paper_wrapper(self, arxiv_id: str):
         """Wrapper cho mỗi thread"""
@@ -39,7 +39,7 @@ class ParallelArxivScraper:
             success = scraper.scrape_paper(arxiv_id, paper_dir)
             paper_time = time.time() - paper_start
             
-            # Lưu thời gian (thread-safe)
+            # Luu thoi gian (thread-safe)
             with self.lock:
                 self.paper_times.append({
                     'arxiv_id': arxiv_id,
@@ -53,7 +53,7 @@ class ParallelArxivScraper:
             return arxiv_id, False
     
     def calculate_metrics(self):
-        """Tính 15 metrics theo Lab 1"""
+        """Tinh 15 metrics theo Lab 1"""
         import psutil
         
         papers = [d for d in os.listdir(self.output_dir) 
@@ -63,7 +63,7 @@ class ParallelArxivScraper:
         if total_papers == 0:
             return None
         
-        # Khởi tạo biến đếm
+        # Khoi tao bien dem
         successful_papers = 0
         total_size_before_bytes = 0
         total_size_after_bytes = 0
@@ -73,7 +73,7 @@ class ParallelArxivScraper:
         ref_api_success = 0
         paper_details = []
         
-        # Quét tất cả papers
+        # Quet tat ca papers
         for paper_id in papers:
             paper_path = os.path.join(self.output_dir, paper_id)
             
@@ -85,7 +85,7 @@ class ParallelArxivScraper:
             if is_success:
                 successful_papers += 1
             
-            # Tính size SAU khi xóa hình
+            # Tinh size SAU khi xoa hinh
             paper_size_after = 0
             versions = 0
             tex_files = 0
@@ -118,13 +118,13 @@ class ParallelArxivScraper:
                     except:
                         pass
             
-            # Ước tính size TRƯỚC (~12MB/version)
+            # Uoc tinh size TRUOC (~12MB/version)
             paper_size_before = paper_size_after + (12 * 1024 * 1024 * max(versions, 1))
             
             total_size_after_bytes += paper_size_after
             total_size_before_bytes += paper_size_before
             
-            # Đếm references
+            # Dem references
             num_refs = 0
             if has_references:
                 ref_api_calls += 1
@@ -151,18 +151,18 @@ class ParallelArxivScraper:
                 'size_after_bytes': paper_size_after
             })
         
-        # Tính chỉ số
+        # Tinh chi so
         avg_size_before = total_size_before_bytes / total_papers
         avg_size_after = total_size_after_bytes / total_papers
         avg_references = total_references / papers_with_refs if papers_with_refs > 0 else 0
         ref_success_rate = (ref_api_success / ref_api_calls * 100) if ref_api_calls > 0 else 0
         overall_success_rate = (successful_papers / total_papers * 100)
         
-        # Thời gian
+        # Thoi gian
         elapsed = time.time() - self.start_time if self.start_time else 0
         avg_time_per_paper = sum(p['time_seconds'] for p in self.paper_times) / len(self.paper_times) if self.paper_times else 0
         
-        # RAM và Disk
+        # RAM va Disk
         ram_mb = psutil.virtual_memory().used / (1024**2)
         disk_mb = psutil.disk_usage('/').used / (1024**2)
         
@@ -205,7 +205,7 @@ class ParallelArxivScraper:
         return metrics, paper_details
     
     def save_metrics(self):
-        """Lưu 3 files: JSON + 2 CSV"""
+        """Luu 3 files: JSON + 2 CSV"""
         result = self.calculate_metrics()
         if not result:
             return
@@ -258,16 +258,16 @@ class ParallelArxivScraper:
         output_csv_details = f'{STUDENT_ID}_paper_details.csv'
         df_details.to_csv(output_csv_details, index=False, encoding='utf-8')
         
-        logger.info(f"\n📊 Đã lưu metrics:")
-        logger.info(f"   • {output_json}")
-        logger.info(f"   • {output_csv_main}")
-        logger.info(f"   • {output_csv_details}")
+        logger.info(f"Da luu metrics:")
+        logger.info(f"  - {output_json}")
+        logger.info(f"  - {output_csv_main}")
+        logger.info(f"  - {output_csv_details}")
     
     def scrape_papers_batch(self, paper_ids: List[str], batch_size: int = 50, 
                            update_interval: int = 100):
         """
         Scrape papers theo batch
-        Tự động update metrics mỗi update_interval papers
+        Tu dong update metrics moi update_interval papers
         """
         self.start_time = time.time()
         total = len(paper_ids)
@@ -291,9 +291,9 @@ class ParallelArxivScraper:
             current_total = i + len(batch)
             logger.info(f"Progress: {current_total}/{total} | Success: {successful} | Failed: {failed}")
             
-            # CẬP NHẬT METRICS mỗi update_interval papers
+            # Cap nhat metrics moi update_interval papers
             if current_total % update_interval == 0 or current_total == total:
-                logger.info(f"\n📊 Cập nhật metrics (đã xử lý {current_total}/{total} papers)...")
+                logger.info(f"Cap nhat metrics: da xu ly {current_total}/{total} papers")
                 self.save_metrics()
         
         return {'successful': successful, 'failed': failed, 'total': total}

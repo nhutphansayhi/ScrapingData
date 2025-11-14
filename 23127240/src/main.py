@@ -542,37 +542,47 @@ class ArxivScraperPipeline:
         """
         stats_file = os.path.join(self.output_dir, "scraping_stats.json")
         
+        # Calculate 15 required metrics
+        ref_stats = self.reference_scraper.get_stats()
+        
         all_stats = {
-            'student_id': STUDENT_ID,
-            'paper_range': {
-                'start': f"{START_YEAR_MONTH}.{START_ID:05d}",
-                'end': f"{END_YEAR_MONTH}.{END_ID:05d}"
+            'metadata': {
+                'student_id': STUDENT_ID,
+                'paper_range_start': f"{START_YEAR_MONTH}.{START_ID:05d}",
+                'paper_range_end': f"{END_YEAR_MONTH}.{END_ID:05d}",
+                'total_papers_attempted': self.stats['total_papers'],
+                'generated_at': time.strftime('%Y-%m-%d %H:%M:%S'),
+                'testbed': 'Google Colab CPU-only'
             },
-            'data_statistics': {
-                'total_papers': self.stats['total_papers'],
-                'successful_papers': self.stats['successful_papers'],
+            'required_15_metrics': {
+                'data_statistics': {
+                    'metric_1_papers_scraped_successfully': self.stats['successful_papers'],
+                    'metric_2_overall_success_rate_percent': round((self.stats['successful_papers']/max(1, self.stats['total_papers']))*100, 2),
+                    'metric_3_avg_size_before_removing_figures_bytes': round(sum(self.stats['paper_sizes_before']) / len(self.stats['paper_sizes_before']), 2) if self.stats['paper_sizes_before'] else 0,
+                    'metric_4_avg_size_after_removing_figures_bytes': round(sum(self.stats['paper_sizes_after']) / len(self.stats['paper_sizes_after']), 2) if self.stats['paper_sizes_after'] else 0,
+                    'metric_5_avg_references_per_paper': round(sum(self.stats['reference_counts']) / len(self.stats['reference_counts']), 2) if self.stats['reference_counts'] else 0,
+                    'metric_6_reference_metadata_success_rate_percent': round((ref_stats['papers_found'] / max(1, ref_stats['papers_queried'])) * 100, 2),
+                    'metric_7_other_stats_total_references_found': ref_stats['total_references']
+                },
+                'performance_running_time': {
+                    'metric_8_total_wall_time_seconds': round(self.stats['total_runtime'], 2),
+                    'metric_9_total_time_process_one_paper_seconds': round(sum(self.stats['paper_runtimes']) / len(self.stats['paper_runtimes']), 2) if self.stats['paper_runtimes'] else 0,
+                    'metric_10_avg_time_per_required_paper_seconds': round(sum(self.stats['paper_runtimes']) / len(self.stats['paper_runtimes']), 2) if self.stats['paper_runtimes'] else 0,
+                    'metric_11_entry_discovery_time_seconds': round(self.stats['discovery_time'], 2)
+                },
+                'performance_memory_footprint': {
+                    'metric_12_maximum_ram_used_mb': round(self.stats['max_ram_mb'], 2),
+                    'metric_13_average_ram_consumption_mb': round(self.stats['avg_ram_mb'], 2),
+                    'metric_14_maximum_disk_storage_required_mb': round(self.stats['max_disk_mb'], 2),
+                    'metric_15_final_output_storage_size_mb': round(self.stats['final_disk_mb'], 2)
+                }
+            },
+            'additional_details': {
                 'failed_papers': self.stats['failed_papers'],
-                'overall_success_rate': f"{self.stats['successful_papers']/max(1, self.stats['total_papers'])*100:.2f}%",
-                'avg_paper_size_before_bytes': sum(self.stats['paper_sizes_before']) / len(self.stats['paper_sizes_before']) if self.stats['paper_sizes_before'] else 0,
-                'avg_paper_size_after_bytes': sum(self.stats['paper_sizes_after']) / len(self.stats['paper_sizes_after']) if self.stats['paper_sizes_after'] else 0,
-                'avg_references_per_paper': sum(self.stats['reference_counts']) / len(self.stats['reference_counts']) if self.stats['reference_counts'] else 0,
-                'reference_metadata_success_rate': f"{(self.reference_scraper.get_stats()['papers_found'] / max(1, self.reference_scraper.get_stats()['papers_queried'])) * 100:.2f}%"
-            },
-            'performance_running_time': {
-                'total_runtime_seconds': round(self.stats['total_runtime'], 2),
-                'total_runtime_minutes': round(self.stats['total_runtime'] / 60, 2),
-                'entry_discovery_time_seconds': round(self.stats['discovery_time'], 2),
-                'average_time_per_paper_seconds': round(sum(self.stats['paper_runtimes']) / len(self.stats['paper_runtimes']), 2) if self.stats['paper_runtimes'] else 0,
-                'total_paper_processing_time_seconds': round(sum(self.stats['paper_runtimes']), 2) if self.stats['paper_runtimes'] else 0
-            },
-            'performance_memory_footprint': {
-                'max_ram_mb': round(self.stats['max_ram_mb'], 2),
-                'avg_ram_mb': round(self.stats['avg_ram_mb'], 2),
-                'max_disk_storage_mb': round(self.stats['max_disk_mb'], 2),
-                'final_output_storage_mb': round(self.stats['final_disk_mb'], 2)
-            },
-            'arxiv_statistics': self.arxiv_scraper.get_stats(),
-            'reference_statistics': self.reference_scraper.get_stats()
+                'total_paper_processing_time_seconds': round(sum(self.stats['paper_runtimes']), 2) if self.stats['paper_runtimes'] else 0,
+                'arxiv_scraper_stats': self.arxiv_scraper.get_stats() if hasattr(self.arxiv_scraper, 'get_stats') else {},
+                'reference_scraper_stats': ref_stats
+            }
         }
         
         with open(stats_file, 'w', encoding='utf-8') as f:
@@ -587,60 +597,100 @@ class ArxivScraperPipeline:
             self.save_paper_details_csv()
     
     def save_stats_csv(self):
-        """Save statistics in CSV format for easy import into reports"""
+        """Save 15 REQUIRED METRICS in CSV format as per Lab 1 requirements"""
         csv_file = os.path.join(self.output_dir, "scraping_stats.csv")
         
-        # Calculate stats
-        avg_size_before = sum(self.stats['paper_sizes_before']) / len(self.stats['paper_sizes_before']) if self.stats['paper_sizes_before'] else 0
-        avg_size_after = sum(self.stats['paper_sizes_after']) / len(self.stats['paper_sizes_after']) if self.stats['paper_sizes_after'] else 0
-        avg_refs = sum(self.stats['reference_counts']) / len(self.stats['reference_counts']) if self.stats['reference_counts'] else 0
-        avg_runtime_per_paper = sum(self.stats['paper_runtimes']) / len(self.stats['paper_runtimes']) if self.stats['paper_runtimes'] else 0
+        # Calculate the 15 required metrics
+        total_papers = self.stats['total_papers']
+        successful_papers = self.stats['successful_papers']
         
+        # Metric 1: Number of papers scraped successfully
+        metric_1 = successful_papers
+        
+        # Metric 2: Overall success rate
+        metric_2 = (successful_papers / max(1, total_papers)) * 100
+        
+        # Metric 3: Average paper size BEFORE removing figures (bytes)
+        metric_3 = sum(self.stats['paper_sizes_before']) / len(self.stats['paper_sizes_before']) if self.stats['paper_sizes_before'] else 0
+        
+        # Metric 4: Average paper size AFTER removing figures (bytes)
+        metric_4 = sum(self.stats['paper_sizes_after']) / len(self.stats['paper_sizes_after']) if self.stats['paper_sizes_after'] else 0
+        
+        # Metric 5: Average number of references per paper
+        metric_5 = sum(self.stats['reference_counts']) / len(self.stats['reference_counts']) if self.stats['reference_counts'] else 0
+        
+        # Metric 6: Average success rate for scraping reference metadata
         ref_stats = self.reference_scraper.get_stats()
-        ref_success_rate = (ref_stats['papers_found'] / max(1, ref_stats['papers_queried'])) * 100
+        metric_6 = (ref_stats['papers_found'] / max(1, ref_stats['papers_queried'])) * 100
         
+        # Metric 7: Other relevant statistics (total references found)
+        metric_7 = ref_stats['total_references']
+        
+        # Metric 8: Wall time (total runtime end-to-end)
+        metric_8 = self.stats['total_runtime']
+        
+        # Metric 9: Total time to process ONE paper (average)
+        metric_9 = sum(self.stats['paper_runtimes']) / len(self.stats['paper_runtimes']) if self.stats['paper_runtimes'] else 0
+        
+        # Metric 10: Average time to process each required paper (same as metric 9)
+        metric_10 = metric_9
+        
+        # Metric 11: Total time for entry discovery
+        metric_11 = self.stats['discovery_time']
+        
+        # Metric 12: Maximum RAM used
+        metric_12 = self.stats['max_ram_mb']
+        
+        # Metric 13: Average RAM consumption
+        metric_13 = self.stats['avg_ram_mb']
+        
+        # Metric 14: Maximum disk storage required
+        metric_14 = self.stats['max_disk_mb']
+        
+        # Metric 15: Final output's storage size
+        metric_15 = self.stats['final_disk_mb']
+        
+        # Generate timestamp
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # CSV rows following Lab 1 required format
         rows = [
-            ['Metric Category', 'Metric Name', 'Value', 'Unit'],
-            ['', '', '', ''],
-            ['General Info', 'Student ID', STUDENT_ID, ''],
-            ['General Info', 'Paper Range Start', f"{START_YEAR_MONTH}.{START_ID:05d}", ''],
-            ['General Info', 'Paper Range End', f"{END_YEAR_MONTH}.{END_ID:05d}", ''],
-            ['', '', '', ''],
-            ['Data Statistics', 'Total Papers Attempted', self.stats['total_papers'], 'papers'],
-            ['Data Statistics', 'Successful Papers', self.stats['successful_papers'], 'papers'],
-            ['Data Statistics', 'Failed Papers', self.stats['failed_papers'], 'papers'],
-            ['Data Statistics', 'Overall Success Rate', f"{self.stats['successful_papers']/max(1, self.stats['total_papers'])*100:.2f}", '%'],
-            ['Data Statistics', 'Avg Paper Size Before (removing figures)', f"{avg_size_before:.2f}", 'bytes'],
-            ['Data Statistics', 'Avg Paper Size Before (removing figures)', f"{avg_size_before/1024:.2f}", 'KB'],
-            ['Data Statistics', 'Avg Paper Size After (removing figures)', f"{avg_size_after:.2f}", 'bytes'],
-            ['Data Statistics', 'Avg Paper Size After (removing figures)', f"{avg_size_after/1024:.2f}", 'KB'],
-            ['Data Statistics', 'Size Reduction', f"{((avg_size_before - avg_size_after) / max(1, avg_size_before) * 100):.2f}", '%'],
-            ['Data Statistics', 'Avg References Per Paper', f"{avg_refs:.2f}", 'references'],
-            ['Data Statistics', 'Papers Queried for References', ref_stats['papers_queried'], 'papers'],
-            ['Data Statistics', 'Papers Found with References', ref_stats['papers_found'], 'papers'],
-            ['Data Statistics', 'Total References Found', ref_stats['total_references'], 'references'],
-            ['Data Statistics', 'References with arXiv ID', ref_stats['references_with_arxiv_id'], 'references'],
-            ['Data Statistics', 'Reference Metadata Success Rate', f"{ref_success_rate:.2f}", '%'],
-            ['', '', '', ''],
-            ['Performance - Running Time', 'Total Runtime (Wall Time)', f"{self.stats['total_runtime']:.2f}", 'seconds'],
-            ['Performance - Running Time', 'Total Runtime (Wall Time)', f"{self.stats['total_runtime']/60:.2f}", 'minutes'],
-            ['Performance - Running Time', 'Entry Discovery Time', f"{self.stats['discovery_time']:.2f}", 'seconds'],
-            ['Performance - Running Time', 'Avg Time Per Paper', f"{avg_runtime_per_paper:.2f}", 'seconds'],
-            ['Performance - Running Time', 'Total Paper Processing Time', f"{sum(self.stats['paper_runtimes']):.2f}", 'seconds'],
-            ['Performance - Running Time', 'Total Paper Processing Time', f"{sum(self.stats['paper_runtimes'])/60:.2f}", 'minutes'],
-            ['', '', '', ''],
-            ['Performance - Memory Footprint', 'Maximum RAM Used', f"{self.stats['max_ram_mb']:.2f}", 'MB'],
-            ['Performance - Memory Footprint', 'Average RAM Consumption', f"{self.stats['avg_ram_mb']:.2f}", 'MB'],
-            ['Performance - Memory Footprint', 'Maximum Disk Storage Required', f"{self.stats['max_disk_mb']:.2f}", 'MB'],
-            ['Performance - Memory Footprint', 'Final Output Storage Size', f"{self.stats['final_disk_mb']:.2f}", 'MB'],
-            ['Performance - Memory Footprint', 'Final Output Storage Size', f"{self.stats['final_disk_mb']/1024:.2f}", 'GB'],
+            ['Metric_ID', 'Category', 'Metric_Name', 'Value', 'Unit', 'Notes'],
+            ['', '', '', '', '', ''],
+            ['INFO', 'General', 'Student ID', STUDENT_ID, '', ''],
+            ['INFO', 'General', 'Paper Range', f"{START_YEAR_MONTH}.{START_ID:05d} to {END_YEAR_MONTH}.{END_ID:05d}", '', ''],
+            ['INFO', 'General', 'Total Papers Attempted', total_papers, 'papers', ''],
+            ['INFO', 'General', 'Generated At', timestamp, '', ''],
+            ['', '', '', '', '', ''],
+            ['', '=== DATA STATISTICS (7 metrics) ===', '', '', '', ''],
+            ['1', 'Data Statistics', 'Papers Scraped Successfully', metric_1, 'papers', 'Required Metric 1'],
+            ['2', 'Data Statistics', 'Overall Success Rate', f"{metric_2:.2f}", '%', 'Required Metric 2'],
+            ['3', 'Data Statistics', 'Avg Paper Size Before Removing Figures', f"{metric_3:.2f}", 'bytes', 'Required Metric 3'],
+            ['4', 'Data Statistics', 'Avg Paper Size After Removing Figures', f"{metric_4:.2f}", 'bytes', 'Required Metric 4'],
+            ['5', 'Data Statistics', 'Avg References Per Paper', f"{metric_5:.2f}", 'references', 'Required Metric 5'],
+            ['6', 'Data Statistics', 'Reference Metadata Success Rate', f"{metric_6:.2f}", '%', 'Required Metric 6'],
+            ['7', 'Data Statistics', 'Total References Found', metric_7, 'references', 'Required Metric 7 (other stats)'],
+            ['', '', '', '', '', ''],
+            ['', '=== PERFORMANCE - RUNNING TIME (4 metrics) ===', '', '', '', ''],
+            ['8', 'Performance - Time', 'Total Wall Time (End-to-End)', f"{metric_8:.2f}", 'seconds', 'Required Metric 8'],
+            ['8', 'Performance - Time', 'Total Wall Time (End-to-End)', f"{metric_8/60:.2f}", 'minutes', 'Same as above'],
+            ['9', 'Performance - Time', 'Total Time to Process ONE Paper', f"{metric_9:.2f}", 'seconds', 'Required Metric 9'],
+            ['10', 'Performance - Time', 'Avg Time Per Required Paper', f"{metric_10:.2f}", 'seconds', 'Required Metric 10'],
+            ['11', 'Performance - Time', 'Entry Discovery Time', f"{metric_11:.2f}", 'seconds', 'Required Metric 11'],
+            ['', '', '', '', '', ''],
+            ['', '=== PERFORMANCE - MEMORY FOOTPRINT (4 metrics) ===', '', '', '', ''],
+            ['12', 'Performance - Memory', 'Maximum RAM Used', f"{metric_12:.2f}", 'MB', 'Required Metric 12'],
+            ['13', 'Performance - Memory', 'Average RAM Consumption', f"{metric_13:.2f}", 'MB', 'Required Metric 13'],
+            ['14', 'Performance - Memory', 'Maximum Disk Storage Required', f"{metric_14:.2f}", 'MB', 'Required Metric 14'],
+            ['15', 'Performance - Memory', 'Final Output Storage Size', f"{metric_15:.2f}", 'MB', 'Required Metric 15'],
+            ['15', 'Performance - Memory', 'Final Output Storage Size', f"{metric_15/1024:.2f}", 'GB', 'Same as above'],
         ]
         
         with open(csv_file, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerows(rows)
         
-        logger.info(f"CSV statistics saved to: {csv_file}")
+        logger.info(f"✅ Lab 1 Required Statistics (15 metrics) saved to: {csv_file}")
     
     def collect_paper_details_from_folders(self):
         """Scan tất cả paper folders và build paper_details list"""

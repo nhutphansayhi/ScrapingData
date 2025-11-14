@@ -255,9 +255,9 @@ class ArxivScraper:
             tex_dir = os.path.join(paper_dir, "tex")
             ensure_dir(tex_dir)
             
-            # Try to download versions (start with v1, try up to v10)
+            # Download ALL versions (Lab 1 requirement)
             versions_downloaded = 0
-            revised_dates = []  # Collect all revised dates from versions
+            revised_dates = []
             
             for v in range(1, 11):
                 version = f"v{v}"
@@ -265,55 +265,40 @@ class ArxivScraper:
                 
                 if not success:
                     if v == 1:
-                        # No v1 means paper doesn't exist
-                        logger.error(f"No v1 found for {arxiv_id}")
+                        logger.error(f"No v1 for {arxiv_id}")
                         self.stats['papers_failed'] += 1
                         return False
                     else:
-                        # No more versions
                         break
                 
-                # Collect revised date (skip v1 as it's the submission date)
                 if updated_date and v > 1:
                     if updated_date not in revised_dates:
                         revised_dates.append(updated_date)
                 
-                # Extract source
-                # IMPORTANT: Version folder MUST follow format <yymm-id>v<version>
-                # Example: 2311-14685v1, NOT just v1
-                folder_name = format_folder_name(arxiv_id)  # "2311-14685"
-                version_folder = f"{folder_name}{version}"   # "2311-14685v1"
+                # Extract to version folder
+                folder_name = format_folder_name(arxiv_id)
+                version_folder = f"{folder_name}{version}"
                 version_dir = os.path.join(tex_dir, version_folder)
                 ensure_dir(version_dir)
                 
                 if extract_tar_gz(tar_path, version_dir):
-                    # Process TeX files to remove figures
-                    process_stats = process_tex_files(version_dir)
-                    logger.info(f"Processed {process_stats['processed']} TeX files, "
-                              f"removed {process_stats['images_removed']} image files")
-                    
-                    # CLEAN: Keep ONLY paper.tex and references.bib
-                    clean_stats = clean_version_folder(version_dir)
-                    logger.info(f"Cleaned version folder: kept {clean_stats['kept_tex']} .tex, "
-                              f"{clean_stats['kept_bib']} .bib, removed {clean_stats['removed']} other files")
-                    
+                    process_tex_files(version_dir)
+                    clean_version_folder(version_dir)
                     versions_downloaded += 1
-                    self.stats['versions_downloaded'] += 1
                 
-                # Clean up tar file immediately
+                # Clean tar immediately
                 if os.path.exists(tar_path):
                     try:
                         os.remove(tar_path)
-                        logger.debug(f"Removed tar file: {tar_path}")
-                    except Exception as e:
-                        logger.warning(f"Failed to remove tar file {tar_path}: {e}")
+                    except:
+                        pass
             
             if versions_downloaded == 0:
-                logger.error(f"No versions downloaded for {arxiv_id}")
+                logger.error(f"No versions for {arxiv_id}")
                 self.stats['papers_failed'] += 1
                 return False
             
-            # Update metadata with all revised dates
+            # Update metadata
             metadata['revised_dates'] = sorted(revised_dates)
             
             # Save metadata
@@ -325,7 +310,7 @@ class ArxivScraper:
             self.stats['total_processing_time'] += processing_time
             self.stats['papers_successful'] += 1
             
-            logger.info(f"Successfully scraped {arxiv_id} ({versions_downloaded} versions) in {processing_time:.2f}s")
+            logger.info(f"Successfully scraped {arxiv_id} in {processing_time:.2f}s")
             return True
             
         finally:

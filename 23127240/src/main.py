@@ -9,7 +9,7 @@ from pathlib import Path
 
 from config import *
 from utils import *
-from arxiv_scraper import ArxivScraper
+from parallel_scraper import ParallelArxivScraper
 from reference_scraper_optimized import OptimizedReferenceScraper
 from bibtex_generator import BibtexGenerator
 
@@ -18,11 +18,18 @@ logger = logging.getLogger(__name__)
 
 class ArxivScraperPipeline:
     
-    def __init__(self, output_dir: str):
+    def __init__(self, output_dir: str, use_parallel: bool = True):
         self.output_dir = output_dir
+        self.use_parallel = use_parallel
         ensure_dir(output_dir)
         
-        self.arxiv_scraper = ArxivScraper(output_dir)
+        if use_parallel:
+            self.arxiv_scraper = ParallelArxivScraper(output_dir)
+            logger.info(f"Using PARALLEL scraping with {MAX_WORKERS} workers")
+        else:
+            from arxiv_scraper import ArxivScraper
+            self.arxiv_scraper = ArxivScraper(output_dir)
+        
         self.reference_scraper = OptimizedReferenceScraper(batch_size=500)
         self.bibtex_generator = BibtexGenerator()
         

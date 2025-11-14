@@ -17,15 +17,17 @@ logger = logging.getLogger(__name__)
 
 
 class ArxivScraperPipeline:
+    """Pipeline chính để scrape papers từ arXiv"""
     
     def __init__(self, output_dir: str, use_parallel: bool = True):
         self.output_dir = output_dir
         self.use_parallel = use_parallel
         ensure_dir(output_dir)
         
+        # Dùng parallel scraper để tăng tốc
         if use_parallel:
             self.arxiv_scraper = ParallelArxivScraper(output_dir)
-            logger.info(f"Using PARALLEL scraping with {MAX_WORKERS} workers")
+            logger.info(f"Chạy song song với {MAX_WORKERS} workers")
         else:
             from arxiv_scraper import ArxivScraper
             self.arxiv_scraper = ArxivScraper(output_dir)

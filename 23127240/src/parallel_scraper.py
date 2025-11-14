@@ -13,16 +13,16 @@ logger = logging.getLogger(__name__)
 
 class ParallelArxivScraper:
     """
-    Parallel scraper: 4-8 workers (tuân thủ rate limit)
-    Lab 1 requirement: Tối ưu wall time
+    Scraper chạy song song để tăng tốc
+    Dùng 6 workers (vẫn tuân thủ rate limit)
     """
     
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
-        self.lock = threading.Lock()
+        self.lock = threading.Lock()  # để đảm bảo thread-safe
     
     def scrape_single_paper_wrapper(self, arxiv_id: str):
-        """Thread-safe wrapper"""
+        """Wrapper cho mỗi thread"""
         scraper = ArxivScraper(self.output_dir)
         folder_name = format_folder_name(arxiv_id)
         paper_dir = os.path.join(self.output_dir, folder_name)
@@ -31,13 +31,13 @@ class ParallelArxivScraper:
             success = scraper.scrape_paper(arxiv_id, paper_dir)
             return arxiv_id, success
         except Exception as e:
-            logger.error(f"Error {arxiv_id}: {e}")
+            logger.error(f"Lỗi khi scrape {arxiv_id}: {e}")
             return arxiv_id, False
     
     def scrape_papers_batch(self, paper_ids: List[str], batch_size: int = 50):
         """
-        Scrape papers in batches
-        batch_size = 50 → progress updates every 50 papers
+        Scrape papers theo từng batch
+        Mỗi batch 50 papers để dễ track progress
         """
         total = len(paper_ids)
         successful = 0

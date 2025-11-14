@@ -1,143 +1,145 @@
-# arXiv Paper Scraper - Student ID: 23127240
+# arXiv Paper Scraper - Lab 1
 
-This project scrapes arXiv papers including full TeX sources, metadata, BibTeX references, and citation information using Semantic Scholar API.
+Project scrape paper từ arXiv, lấy source code TeX, metadata, references và info từ Semantic Scholar.
 
-## Assignment Details
+## Thông tin Lab
 
-**Student ID:** 23127240  
-**Paper Range:** 2023-11/14685 to 2023-12/00843  
-**Course:** Introduction to Data Science - Milestone 1
+**MSSV:** 23127240  
+**Khoảng paper:** 2311.14685 đến 2312.00843 (khoảng 5000 papers)
+**Môn:** Nhập môn khoa học dữ liệu - Lab 1
 
-## Features
+## Tính năng chính
 
-- **Parallel Processing:** 4-8 worker threads for optimal speed (tuân thủ API rate limits)
-- **All Versions:** Downloads v1 → v10 của mỗi paper (Lab 1 requirement)
-- **Figure Removal:** Automatic removal để giảm 95% kích thước
-- **Batch API:** Semantic Scholar batch endpoint (500 papers/request)
-- **Complete Metadata:** JSON format với submission/revision dates
-- **BibTeX Generation:** Automatic .bib files
-- **Resume Support:** Skip completed papers khi re-run
+- **Chạy song song:** Dùng 6 threads để tăng tốc (vẫn tuân thủ rate limit của API)
+- **Lấy tất cả version:** Download từ v1 đến v10 của mỗi paper (theo yêu cầu đề bài)
+- **Xóa hình ảnh:** Tự động remove figures để giảm dung lượng (~95%)
+- **Batch API:** Dùng Semantic Scholar batch API (500 papers mỗi lần)
+- **Metadata đầy đủ:** Lưu dạng JSON với ngày submit và update
+- **Tạo BibTeX:** Tự động gen file .bib 
+- **Resume được:** Nếu chạy lại thì skip papers đã xong
 
-## Environment Setup
+## Cài đặt môi trường
 
-### Prerequisites
+### Yêu cầu
 
-- Python 3.8 or higher
-- pip package manager
-- Internet connection for API access
+- Python 3.8 trở lên
+- pip để cài thư viện
+- Kết nối internet
 
-### Installation
+### Cách cài
 
-1. **Clone or extract the project**
+1. **Vào thư mục project**
    ```bash
    cd 23127240
    ```
 
-2. **Create a virtual environment (recommended)**
+2. **Tạo virtual env (nên làm)**
    ```bash
    python -m venv venv
    
-   # On Windows:
+   # Windows:
    venv\Scripts\activate
    
-   # On Linux/Mac:
+   # Mac/Linux:
    source venv/bin/activate
    ```
 
-3. **Install required packages**
+3. **Cài thư viện**
    ```bash
    cd src
    pip install -r requirements.txt
    ```
 
-## Running the Scraper
+## Chạy scraper
 
-### On Google Colab (Lab 1 Testbed)
+### Trên Google Colab (theo yêu cầu Lab)
 
-**Recommended:** Use Colab notebook for benchmarking:
+Dùng notebook này để test trên Colab:
 
-```python
-# Open: https://colab.research.google.com/github/nhutphansayhi/ScrapingDataNew/blob/main/23127240/ArXiv_Scraper_Colab.ipynb
+```
+Link: https://colab.research.google.com/github/nhutphansayhi/ScrapingDataNew/blob/main/23127240/ArXiv_Scraper_Colab.ipynb
 
-# Runtime > Change runtime type > Hardware accelerator > None (CPU-only)
-# Run all cells
+Nhớ chỉnh Runtime > Change runtime type > None (CPU-only như đề yêu cầu)
+Rồi Run all cells
 ```
 
-### Local Usage
+### Chạy local
 
 ```bash
 cd src
 python main.py
 ```
 
-Scrapes papers **2311.14685 → 2312.00843** (5000 papers)
+Sẽ scrape papers từ **2311.14685 đến 2312.00843** (khoảng 5000 cái)
 
-## Performance Optimization
+## Tối ưu hiệu năng
 
-### Parallel Strategy (Lab 1 Compliant)
+### Song song hóa (theo Lab 1)
 
-- **Workers:** 4-8 threads (configurable in `config.py`)
-- **Speedup:** 6x faster than sequential
-- **Rate Limits:** Tuân thủ arXiv & Semantic Scholar
-- **Target:** ~4-6 hours for 5000 papers
+- **Số workers:** Mình dùng 6 threads (có thể đổi trong `config.py`)
+- **Tăng tốc:** Nhanh hơn chạy tuần tự khoảng 6 lần
+- **Rate limit:** Vẫn tuân thủ quy định của arXiv & Semantic Scholar
+- **Mục tiêu:** Chạy xong 5000 papers trong ~4 tiếng
 
-### Configuration
+### Cấu hình
 
-Edit `src/config.py`:
+Sửa trong file `src/config.py`:
 
 ```python
-MAX_WORKERS = 6              # Parallel threads (4-8 recommended)
-ARXIV_API_DELAY = 1.0        # Delay between arXiv requests
-SEMANTIC_SCHOLAR_DELAY = 1.1  # Delay between S2 requests
+MAX_WORKERS = 6              # Số thread song song
+ARXIV_API_DELAY = 1.0        # Delay giữa các request arXiv
+SEMANTIC_SCHOLAR_DELAY = 1.1  # Delay giữa các request S2
 ```
 
-## Output Structure
+## Cấu trúc output
 
-The scraper creates the following directory structure:
+Scraper sẽ tạo thư mục như này:
 
 ```
 23127240_data/
 ├── 2311-14685/
 │   ├── tex/
-│   │   ├── v1/
-│   │   ├── v2/
+│   │   ├── v1/          # version 1
+│   │   ├── v2/          # version 2
 │   │   └── ...
-│   ├── metadata.json
-│   ├── references.bib
-│   └── references.json
+│   ├── metadata.json    # thông tin paper
+│   ├── references.bib   # file bibtex
+│   └── references.json  # danh sách references
 ├── 2311-14686/
 │   └── ...
-└── scraping_stats.json   # Overall scraping statistics
+└── scraping_stats.json   # thống kê tổng quan
 ```
 
-### File Descriptions
+### Giải thích các file
 
-1. **tex/** - Contains all versions of the paper's TeX source files with figures removed
-2. **metadata.json** - Paper metadata including title, authors, submission date, revised dates, abstract, categories, DOI, journal reference
-3. **references.bib** - BibTeX entry for the paper
-4. **references.json** - Dictionary of references that have arXiv IDs with metadata
+1. **tex/** - Chứa source TeX của tất cả versions, đã xoá hình
+2. **metadata.json** - Metadata của paper (title, authors, ngày submit, abstract, categories, DOI, v.v.)
+3. **references.bib** - BibTeX entry
+4. **references.json** - Dict các references có arXiv ID kèm metadata
 
-## Processing Details
+## Chi tiết xử lý
 
-### Figure Removal
+### Xóa hình ảnh
 
-The scraper automatically removes figures from TeX files to reduce storage size by removing `\includegraphics` commands, `\begin{figure}...\end{figure}` environments, and deleting image files.
+Scraper tự động remove figures để giảm dung lượng bằng cách xoá `\includegraphics` commands, xoá `\begin{figure}...\end{figure}` environments, và xoá các file ảnh.
 
-### API Rate Limits
+### Rate limits
 
-The scraper respects API rate limits with 3 seconds delay between arXiv requests and 1.1 seconds delay between Semantic Scholar requests.
+Code có delay giữa các requests: 1s cho arXiv và 1.1s cho Semantic Scholar (tuân thủ quy định API).
 
-### Error Handling
+### Xử lý lỗi
 
-Automatic retry up to 3 attempts for failed requests, graceful handling of missing papers, and detailed logging of all operations.
+- Tự retry tối đa 3 lần nếu request fail
+- Handle được trường hợp paper không tồn tại
+- Log chi tiết các operations
 
-## Logging
+## Logs
 
-Logs are saved to `logs/scraper.log` with progress updates, download status, error messages, and performance statistics.
+Logs được lưu vào `logs/scraper.log` với các thông tin progress, download status, errors và performance stats.
 
-## Statistics Tracking
+## Thống kê
 
-The scraper tracks comprehensive statistics as required:
+Scraper track các số liệu như đề yêu cầu:
 
 ### Data Statistics
 - Number of papers scraped successfully
@@ -160,45 +162,43 @@ The scraper tracks comprehensive statistics as required:
 - Maximum disk storage required
 - Final output storage size
 
-All statistics are saved to `scraping_stats.json` in the output directory.
+Tất cả stats được lưu vào `scraping_stats.json`.
 
-## Performance Notes
+## Performance
 
-- **Runtime**: Approximately 10-15 seconds per paper
-- **Storage**: Each paper typically uses 50-500 KB after figure removal
-- **Memory**: Peak usage around 200-300 MB
+- **Runtime**: Mỗi paper mất khoảng 10-15s
+- **Dung lượng**: Mỗi paper sau khi xoá hình khoảng 50-500 KB
+- **Memory**: Dùng peak khoảng 200-300 MB
 
-## Troubleshooting
+## Xử lý lỗi thường gặp
 
-### Common Issues
+### Các vấn đề hay gặp
 
-1. **"Paper not found" errors** - Some arXiv IDs may not exist, scraper continues with other papers
-2. **Rate limit errors** - Automatically handled with delays
-3. **Connection timeouts** - Automatic retry for failed requests
-4. **Import errors** - Ensure all packages installed: `pip install -r requirements.txt`
+1. **"Paper not found"** - Một số arXiv ID không tồn tại, scraper sẽ skip qua
+2. **Rate limit errors** - Đã handle tự động với delays
+3. **Connection timeout** - Tự retry nếu fail
+4. **Import error** - Nhớ cài đủ packages: `pip install -r requirements.txt`
 
-### Testing on Google Colab
+### Test trên Colab
 
-To run the scraper on Google Colab:
+Để chạy trên Colab:
 
 ```python
-!pip install arxiv requests sickle pandas psutil
+!pip install arxiv requests beautifulsoup4 bibtexparser psutil
 
 !python main.py
 ```
 
-## System Requirements
+## Yêu cầu hệ thống
 
-- **Python**: 3.8 or higher
-- **Disk Space**: At least 1 GB free
-- **RAM**: Minimum 2 GB recommended
-- **Network**: Stable internet connection
+- **Python**: 3.8 trở lên
+- **Ổ cứng**: Tầm 1-2 GB trống
+- **RAM**: Tối thiểu 2 GB
+- **Mạng**: Internet ổn định
 
-## License
+## Ghi chú
 
-This project is created for educational purposes as part of the Introduction to Data Science course.
+Project này làm cho môn Nhập môn khoa học dữ liệu, Lab 1.
 
-## Contact
-
-**Student ID:** 23127240
+**MSSV:** 23127240
 

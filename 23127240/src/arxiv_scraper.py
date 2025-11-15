@@ -12,10 +12,12 @@ logger = logging.getLogger(__name__)
 
 
 class ArxivScraper:
+    """Main class for scraping papers from arXiv"""
     
     def __init__(self, output_dir):
         self.output_dir = output_dir
         self.client = arxiv.Client()
+        # Keep track of success/failure
         self.stats = {
             'papers_attempted': 0,
             'papers_successful': 0,
@@ -23,36 +25,30 @@ class ArxivScraper:
         }
     
     def get_paper_metadata(self, arxiv_id: str) -> Optional[Dict]:
-        """
-        Get metadata for a paper
+        """Get all the metadata for a paper - title, authors, abstract, etc"""
         
-        Args:
-            arxiv_id: arXiv ID (e.g., "2208.11941")
-        
-        Returns:
-            Metadata dictionary or None if failed
-        """
         for attempt in range(MAX_RETRIES):
             try:
+                # Search for the paper
                 search = arxiv.Search(id_list=[arxiv_id])
                 paper = next(self.client.results(search))
                 
-                # Extract metadata
-                # Note: revised_dates will be populated later when downloading all versions
-                # publication_venue can be from journal_ref or comment field
-                publication_venue = paper.journal_ref if paper.journal_ref else (
-                    paper.comment if paper.comment and any(
-                        keyword in paper.comment.lower() 
-                        for keyword in ['conference', 'workshop', 'published', 'accepted', 'journal', 'proceedings']
-                    ) else None
-                )
+                # Try to find publication venue from journal_ref or comment
+                # Sometimes it's in the comment field
+                pub_venue = paper.journal_ref if paper.journal_ref else None
+                if not pub_venue and paper.comment:
+                    # Check if comment mentions a conference/journal
+                    keywords = ['conference', 'workshop', 'published', 'accepted', 'journal', 'proceedings']
+                    if any(keyword in paper.comment.lower() for keyword in keywords):
+                        pub_venue = paper.comment
                 
+                # Build metadata dict
                 metadata = {
                     'title': paper.title,
                     'authors': [author.name for author in paper.authors],
                     'submission_date': paper.published.isoformat() if paper.published else None,
-                    'revised_dates': [],  # Will be populated from all versions
-                    'publication_venue': publication_venue,  # Required by Lab 1
+                    'revised_dates': [],  # will fill this in later when getting all versions
+                    'publication_venue': pub_venue,
                     'abstract': paper.summary,
                     'categories': paper.categories,
                     'primary_category': paper.primary_category,
@@ -63,40 +59,32 @@ class ArxivScraper:
                     'comment': paper.comment
                 }
                 
-                logger.info(f"Retrieved metadata for {arxiv_id}: {paper.title}")
+                logger.info(f"Got metadata for {arxiv_id}: {paper.title}")
                 return metadata
                 
             except StopIteration:
                 logger.warning(f"Paper {arxiv_id} not found")
                 return None
             except Exception as e:
-                logger.warning(f"Attempt {attempt + 1}/{MAX_RETRIES} failed for {arxiv_id}: {e}")
+                logger.warning(f"Try {attempt + 1}/{MAX_RETRIES} failed for {arxiv_id}: {e}")
                 if attempt < MAX_RETRIES - 1:
-                    time.sleep(RETRY_DELAY)
+                    time.sleep(RETRY_DELAY)  # wait before retrying
         
-        logger.error(f"Failed to get metadata for {arxiv_id} after {MAX_RETRIES} attempts")
+        logger.error(f"Gave up on {arxiv_id} after {MAX_RETRIES} tries")
         return None
     
     def download_source(self, arxiv_id, version, output_dir):
-        """
-        Download source files for a specific version
+        """Download the source files (.tex, .bib, etc) for a specific version"""
         
-        Args:
-            arxiv_id: arXiv ID without version
-            version: Version string (e.g., "v1")
-            output_dir: Directory to save source
-        
-        Returns:
-            Tuple of (success, tar_path, updated_date)
-        """
         versioned_id = f"{arxiv_id}{version}"
         
         for attempt in range(MAX_RETRIES):
             try:
+                # Get the paper info
                 search = arxiv.Search(id_list=[versioned_id])
                 paper = next(self.client.results(search))
                 
-                # Get updated date for this version
+                # Save the updated date for this version
                 updated_date = paper.updated.isoformat() if paper.updated else None
                 
                 # Extract year-month and paper number from arxiv_id for source URL

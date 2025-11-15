@@ -16,20 +16,18 @@ logger = logging.getLogger(__name__)
 
 
 class ParallelArxivScraper:
-    """
-    Scraper chay song song de tang toc
-    Dung 6 workers (van tuan thu rate limit)
-    Tu dong update metrics moi 100 papers
+    """Run multiple paper downloads at the same time
+    Using 6 workers seems to work well without hitting rate limits
     """
     
     def __init__(self, output_dir: str):
         self.output_dir = output_dir
-        self.lock = threading.Lock()
+        self.lock = threading.Lock()  # for thread safety
         self.start_time = None
-        self.paper_times = []  # luu thoi gian moi paper
+        self.paper_times = []  # track how long each paper takes
     
     def scrape_single_paper_wrapper(self, arxiv_id: str):
-        """Wrapper cho mỗi thread"""
+        """Wrapper function for each worker thread"""
         paper_start = time.time()
         scraper = ArxivScraper(self.output_dir)
         folder_name = format_folder_name(arxiv_id)
@@ -39,7 +37,7 @@ class ParallelArxivScraper:
             success = scraper.scrape_paper(arxiv_id, paper_dir)
             paper_time = time.time() - paper_start
             
-            # Luu thoi gian (thread-safe)
+            # Save timing info (need lock for thread safety)
             with self.lock:
                 self.paper_times.append({
                     'arxiv_id': arxiv_id,
@@ -49,13 +47,16 @@ class ParallelArxivScraper:
             
             return arxiv_id, success
         except Exception as e:
-            logger.error(f"Lỗi khi scrape {arxiv_id}: {e}")
+            logger.error(f"Error scraping {arxiv_id}: {e}")
             return arxiv_id, False
     
     def calculate_metrics(self):
-        """Tinh 15 metrics theo Lab 1"""
+        """Calculate all 15 metrics required by Lab 1
+        This goes through all the papers and collects stats
+        """
         import psutil
         
+        # Get all paper folders
         papers = [d for d in os.listdir(self.output_dir) 
                  if os.path.isdir(os.path.join(self.output_dir, d)) and '-' in d]
         total_papers = len(papers)
@@ -63,7 +64,7 @@ class ParallelArxivScraper:
         if total_papers == 0:
             return None
         
-        # Khoi tao bien dem
+        # Initialize counters
         successful_papers = 0
         total_size_before_bytes = 0
         total_size_after_bytes = 0
@@ -73,7 +74,7 @@ class ParallelArxivScraper:
         ref_api_success = 0
         paper_details = []
         
-        # Quet tat ca papers
+        # Go through each paper
         for paper_id in papers:
             paper_path = os.path.join(self.output_dir, paper_id)
             

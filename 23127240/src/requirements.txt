@@ -1,8 +1,7 @@
-# Required packages for arXiv scraper
+# Python packages I need for the scraper
 # Install with: pip install -r requirements.txt
 
-arxiv==2.1.0
-requests==2.31.0
-sickle==0.7.0
-pandas==2.0.3
-psutil==5.9.5
+arxiv==2.1.0          # for accessing arXiv API
+requests==2.31.0      # for HTTP requests
+pandas==2.0.3         # for saving metrics as CSV
+psutil==5.9.5         # for tracking RAM/disk usage

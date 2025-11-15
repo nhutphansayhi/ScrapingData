@@ -1,6 +1,4 @@
-"""
-Utility functions for arXiv scraper
-"""
+# Helper functions for the scraper
 
 import os
 import re
@@ -15,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 def setup_logging(log_dir: str = "./logs"):
-    """Setup logging configuration"""
+    """Set up logging so we can see what's happening"""
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "scraper.log")
     
@@ -30,96 +28,72 @@ def setup_logging(log_dir: str = "./logs"):
 
 
 def format_arxiv_id(year_month: str, paper_id: int) -> str:
-    """
-    Format arXiv ID from year-month and paper ID
-    
-    Args:
-        year_month: Year-month string (e.g., "2208")
-        paper_id: Paper ID number
-    
-    Returns:
-        Formatted arXiv ID (e.g., "2208.11941")
+    """Convert year-month and ID to proper arXiv format
+    Example: "2208" and 11941 -> "2208.11941"
     """
     return f"{year_month}.{paper_id:05d}"
 
 
 def format_folder_name(arxiv_id: str) -> str:
-    """
-    Convert arXiv ID to folder name format
-    
-    Args:
-        arxiv_id: arXiv ID (e.g., "2208.11941")
-    
-    Returns:
-        Folder name (e.g., "2208-11941")
+    """Convert arXiv ID to folder name (replace dot with dash)
+    Example: "2208.11941" -> "2208-11941"
     """
     return arxiv_id.replace(".", "-")
 
 
 def extract_tar_gz(tar_path: str, extract_dir: str) -> bool:
-    """
-    Extract .tar.gz file or handle gzip-compressed LaTeX source
-    
-    Args:
-        tar_path: Path to .tar.gz file
-        extract_dir: Directory to extract to
-    
-    Returns:
-        True if successful, False otherwise
+    """Extract tar.gz file or handle gzip compressed files
+    This was tricky - some papers are tar archives, some are just gzipped tex files!
     """
     if not os.path.exists(tar_path):
-        logger.error(f"Failed to extract {tar_path}: file does not exist")
+        logger.error(f"File doesn't exist: {tar_path}")
         return False
     
-    # Try to extract as tar.gz first
+    # Try as tar.gz first
     try:
         with tarfile.open(tar_path, 'r:*') as tar:
             tar.extractall(path=extract_dir)
-        logger.info(f"Extracted {tar_path} to {extract_dir}")
+        logger.info(f"Extracted tar archive {tar_path}")
         return True
     except (tarfile.TarError, tarfile.ReadError):
-        # If tar extraction fails, try as gzip-compressed LaTeX source
+        # Not a tar file, maybe it's just gzipped?
         try:
             with gzip.open(tar_path, 'rb') as gz_file:
                 content = gz_file.read()
             
-            # Check if it's LaTeX source (starts with \documentclass or similar)
+            # Check if it looks like a LaTeX file
             if content.startswith(b'\\') or b'\\documentclass' in content[:1000]:
-                # Determine filename from tar_path
                 base_name = os.path.splitext(os.path.splitext(os.path.basename(tar_path))[0])[0]
                 tex_filename = f"{base_name}.tex"
                 tex_path = os.path.join(extract_dir, tex_filename)
                 
-                # Write decompressed content
                 with open(tex_path, 'wb') as f:
                     f.write(content)
                 
-                logger.info(f"Extracted gzip-compressed LaTeX source {tar_path} to {tex_path}")
+                logger.info(f"Extracted gzipped tex file {tar_path}")
                 return True
             else:
-                logger.error(f"Failed to extract {tar_path}: not a valid tar archive or LaTeX source")
+                logger.error(f"Can't extract {tar_path}: not a valid file")
                 return False
-        except (gzip.BadGzipFile, OSError) as gz_error:
-            # File is not gzipped, try reading as plain text/LaTeX
+        except (gzip.BadGzipFile, OSError):
+            # Not gzipped either, maybe it's just a plain tex file?
             try:
                 with open(tar_path, 'rb') as f:
                     content = f.read()
                 
-                # Check if it's LaTeX source or plain text
+                # Check if it's a tex file
                 if content.startswith(b'\\') or b'\\documentclass' in content[:1000] or b'%' in content[:100]:
-                    # Determine filename from tar_path
                     base_name = os.path.splitext(os.path.splitext(os.path.basename(tar_path))[0])[0]
                     tex_filename = f"{base_name}.tex"
                     tex_path = os.path.join(extract_dir, tex_filename)
                     
-                    # Write content as-is
                     with open(tex_path, 'wb') as f:
                         f.write(content)
                     
-                    logger.info(f"Extracted plain LaTeX source {tar_path} to {tex_path}")
+                    logger.info(f"Extracted plain tex file {tar_path}")
                     return True
                 else:
-                    logger.error(f"Failed to extract {tar_path}: not a valid archive or LaTeX source (got: {content[:20]})")
+                    logger.error(f"Can't figure out what {tar_path} is")
                     return False
             except Exception as e:
                 logger.error(f"Failed to extract {tar_path}: {e}")
@@ -133,14 +107,8 @@ def extract_tar_gz(tar_path: str, extract_dir: str) -> bool:
 
 
 def remove_figures_from_tex(tex_content: str) -> str:
-    """
-    Remove figure environments and includegraphics commands from TeX content
-    
-    Args:
-        tex_content: Original TeX file content
-    
-    Returns:
-        TeX content with figures removed
+    """Remove figure commands from tex files
+    Originally tried to be fancy with this but simpler is better
     """
     # Remove \includegraphics commands
     tex_content = re.sub(

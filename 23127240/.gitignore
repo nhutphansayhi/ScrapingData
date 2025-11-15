@@ -1,4 +1,4 @@
-# Python
+# Python stuff
 __pycache__/
 *.py[cod]
 *$py.class
@@ -11,33 +11,37 @@ ENV/
 dist/
 build/
 
-# Data directories
+# Data folders (don't want to commit 5000 papers!)
 23127240_data/
 23127240_test_data/
 *.zip
 
-# Logs
+# Log files
 logs/
 *.log
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# Mac OS stuff
 .DS_Store
 Thumbs.db
 
-# Temporary files
+# Temp files
 temp/
 tmp/
 *.tmp
 *.tar.gz
 *.bak
 
-# Jupyter
+# Jupyter checkpoints
 .ipynb_checkpoints/
+
+# Old versions
+*_OLD.*
+*_NEW.*
 

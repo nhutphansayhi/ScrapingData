@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""
-Main script to run parallel arXiv scraper
-Designed for Google Colab execution
-"""
+# Main script to run the scraper
+# Made for Google Colab
 
 import sys
 import os
@@ -17,7 +15,7 @@ from utils import setup_logging, ensure_dir, format_arxiv_id
 from parallel_scraper import ParallelArxivScraper
 
 def main():
-    """Main execution function"""
+    """Main function that runs everything"""
     # Setup logging
     setup_logging(LOGS_DIR)
     logger = logging.getLogger(__name__)
@@ -25,25 +23,25 @@ def main():
     logger.info("="*80)
     logger.info("STARTING ARXIV SCRAPER")
     logger.info(f"Student ID: {STUDENT_ID}")
-    logger.info(f"Paper range: {START_YEAR_MONTH}.{START_ID:05d} to {END_YEAR_MONTH}.{END_ID:05d}")
-    logger.info(f"Workers: {MAX_WORKERS}")
+    logger.info(f"Papers: {START_YEAR_MONTH}.{START_ID:05d} to {END_YEAR_MONTH}.{END_ID:05d}")
+    logger.info(f"Using {MAX_WORKERS} workers")
     logger.info("="*80)
     
-    # Calculate paper IDs to scrape
+    # Figure out which paper IDs to scrape
     paper_ids = []
     
-    # Calculate how many papers needed from first month
+    # Need 5000 papers total
     TARGET_TOTAL = 5000
     total_in_last_month = END_ID
     papers_from_first_month = TARGET_TOTAL - total_in_last_month
     first_month_end_id = START_ID + papers_from_first_month - 1
     
-    # First month: from START_ID to calculated end
+    # Get papers from first month (2311)
     for paper_id in range(START_ID, first_month_end_id + 1):
         arxiv_id = format_arxiv_id(START_YEAR_MONTH, paper_id)
         paper_ids.append(arxiv_id)
     
-    # Second month: from 1 to END_ID
+    # Get papers from second month (2312)
     for paper_id in range(1, END_ID + 1):
         arxiv_id = format_arxiv_id(END_YEAR_MONTH, paper_id)
         paper_ids.append(arxiv_id)

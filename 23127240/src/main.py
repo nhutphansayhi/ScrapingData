@@ -718,6 +718,8 @@ class ArxivScraperPipeline:
             metadata_path = os.path.join(paper_dir, "metadata.json")
             title = 'N/A'
             authors = []
+            runtime_s = 0.0
+            processed_at_from_metadata = None
             
             if os.path.exists(metadata_path):
                 try:
@@ -725,6 +727,8 @@ class ArxivScraperPipeline:
                         metadata = json.load(f)
                         title = metadata.get('title', 'N/A')
                         authors = metadata.get('authors', [])
+                        runtime_s = metadata.get('runtime_seconds', 0.0)
+                        processed_at_from_metadata = metadata.get('processed_at')
                 except:
                     pass
             
@@ -751,11 +755,13 @@ class ArxivScraperPipeline:
                 except:
                     pass
             
-            # Get processed time (from metadata file mtime)
-            processed_at = 'N/A'
-            if os.path.exists(metadata_path):
+            # Get processed time (from metadata or file mtime)
+            processed_at = processed_at_from_metadata
+            if not processed_at and os.path.exists(metadata_path):
                 processed_at = time.strftime('%Y-%m-%d %H:%M:%S', 
                                             time.localtime(os.path.getmtime(metadata_path)))
+            if not processed_at:
+                processed_at = 'N/A'
             
             # Add to list
             paper_detail = {
@@ -763,7 +769,7 @@ class ArxivScraperPipeline:
                 'arxiv_id': arxiv_id,
                 'title': title[:100],  # Limit title length
                 'authors': ', '.join(authors[:3]) if authors else 'N/A',  # Max 3 authors
-                'runtime_s': 0.0,  # Not tracked in parallel mode
+                'runtime_s': runtime_s,
                 'size_before': size_before,
                 'size_after': size_after,
                 'size_before_figures': size_before,

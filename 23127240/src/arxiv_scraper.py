@@ -301,12 +301,16 @@ class ArxivScraper:
             # Update metadata
             metadata['revised_dates'] = sorted(revised_dates)
             
+            # Calculate processing time
+            processing_time = time.time() - start_time
+            metadata['runtime_seconds'] = round(processing_time, 2)
+            metadata['processed_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
+            
             # Save metadata
             metadata_path = os.path.join(paper_dir, "metadata.json")
             with open(metadata_path, 'w', encoding='utf-8') as f:
                 json.dump(metadata, f, indent=2, ensure_ascii=False)
             
-            processing_time = time.time() - start_time
             self.stats['total_processing_time'] += processing_time
             self.stats['papers_successful'] += 1
             
